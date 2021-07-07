@@ -1,0 +1,7 @@
+# Scala
+.bloop
+.metals
+.idea
+.bsp
+target/
+project/
