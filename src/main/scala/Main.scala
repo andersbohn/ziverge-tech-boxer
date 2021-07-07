@@ -1,5 +1,11 @@
-@main def hello: Unit = 
-  println("Hello world!")
-  println(msg)
+import zio.*
+import zio.logging.*
 
-def msg = "I was compiled by Scala 3. :)"
+object Main extends App:
+  val live = Logging.console()
+
+  override def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] =
+    (for {
+      _ <- console.putStrLn("ZivergeTechBoxer - spinning up .. ")
+
+    } yield ()).provideSomeLayer[ZEnv](live).exitCode
