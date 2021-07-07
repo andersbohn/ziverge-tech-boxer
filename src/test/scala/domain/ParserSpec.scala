@@ -30,7 +30,7 @@ object MiniSpec extends DefaultRunnableSpec {
       },
       testM(" read a json file stream ") {
         (for {
-          fromFile   <- eventsrc.eventStream
+          fromFile   <- eventsrc.eventList
         } yield assert("bar")(equalTo(fromFile.head.eventType))
           )
       }.provideSomeLayer[ZEnv](layers)
