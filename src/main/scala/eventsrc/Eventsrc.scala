@@ -3,9 +3,10 @@ package eventsrc
 import zio.*
 import zio.console.*
 import zio.blocking.*
+import zio.clock.Clock
 import zio.stream.*
 import zio.stm.*
-import zio.duration._
+import zio.duration.*
 import domain.{ Event, EventRaw, Stats }
 import eventsrc.Eventsrc.EventsrcEnv
 
@@ -18,7 +19,7 @@ case class RawEventInputStream(inputStream: InputStream)
 
 object Eventsrc {
 
-  type EventsrcEnv = Console & Blocking & EventsrcService
+  type EventsrcEnv = Clock & Console & Blocking & EventsrcService
 
   trait Service {
     def eventStream: ZStream[EventsrcEnv, Throwable, Either[Throwable, Event]]
@@ -70,14 +71,11 @@ case object EventsFromInputStreamImpl {
         } yield event
 
       override def streamEm(statsStm: TRef[Stats]): ZIO[EventsrcEnv, Throwable, Long] =
-        eventStream.mapM(x => updateStats(statsStm, Stats.one(x))).runCount
-//        val x: ZStream[eventsrc.Eventsrc.EventsrcEnv & zio.clock.Clock, Throwable, Chunk[Either[Throwable,Event]]] = eventStream.groupedWithin(30, 3.seconds)
-//        x.mapChunks(identity).mapM{ cs =>
-//          cs.map { c =>
-//            updateStats(statsStm, Stats.one(c))
-//          }
-//
-//        }.runCount
+        eventStream
+          .mapM(x => updateStats(statsStm, Stats.one(x)))
+          .groupedWithin(30, 60.seconds)
+          .mapM(x => STM.atomically(statsStm.update(_ => Stats.zero)) *> Task.succeed(x))
+          .runCount
 
       override def eventStream: ZStream[EventsrcEnv, Throwable, Either[Throwable, Event]] =
         ZStream

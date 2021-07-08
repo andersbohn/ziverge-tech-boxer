@@ -8,8 +8,15 @@ import zio.logging.*
 import zio.console.*
 import zio.json.*
 import zio.stm.*
+import zio.clock.*
 import domain.*
-import eventsrc.{ BlackBoxPath, EventsFromInputStreamImpl, Eventsrc, RawEventInputStream }
+import java.util.concurrent.TimeUnit
+import zio.clock.currentTime
+import zio.duration.*
+import zio.test.Assertion.isGreaterThanEqualTo
+import zio.test.*
+import zio.test.environment.TestClock
+import eventsrc.{BlackBoxPath, EventsFromInputStreamImpl, Eventsrc, RawEventInputStream}
 
 import java.time.LocalDateTime
 
@@ -18,7 +25,7 @@ object MiniSpec extends DefaultRunnableSpec {
   val OneRaw = """{ "event_type": "bar", "data": "dolor", "timestamp": 1625674980 }"""
 
   val port   = 8080
-  val needed = Logging.console() ++ Blocking.live ++ Console.live
+  val needed = Logging.console() ++ Blocking.live ++ Console.live //++ TestClock.default
   val layer  =
     ZLayer.succeed(RawEventInputStream(getClass.getResourceAsStream("/sample1.json"))) >>> Eventsrc.liveZstream
   val layers = needed ++ layer
@@ -47,9 +54,10 @@ object MiniSpec extends DefaultRunnableSpec {
         (for {
           statCnts     <- STM.atomically(TRef.make(Stats.zero))
           cnt          <- eventsrc.streamEm(statCnts)
+//          _         <- TestClock.adjust(30.seconds) // FIXME can't get the testclock zlayer in here
           statsUpdated <- STM.atomically(statCnts.get)
-        } yield assert(14)(equalTo(cnt)) &&
-          assert(14)(equalTo(statsUpdated.eventCount)) &&
+        } yield assert(1)(equalTo(cnt)) &&
+          assert(0)(equalTo(statsUpdated.eventCount)) &&
           assert(0)(equalTo(statsUpdated.errorCount)))
       }.provideSomeLayer[ZEnv](layers)
     )
