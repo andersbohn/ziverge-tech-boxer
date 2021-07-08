@@ -6,7 +6,7 @@ import zio.test.*
 import zio.test.Assertion.*
 import zio.json.*
 import domain.*
-import eventsrc.{EventFile, EventFromFileImpl, Eventsrc}
+import eventsrc.{RawEventInputStream, EventsFromInputStreamImpl, Eventsrc}
 
 import java.time.LocalDateTime
 
@@ -31,7 +31,7 @@ object MiniSpec extends DefaultRunnableSpec {
       },
       testM(" read a json file stream ") {
         (for {
-          fromFile   <- EventFromFileImpl.eventFileService(EventFile(getClass.getResourceAsStream("/sample1.json"))).eventStream.take(5).runCount
+          fromFile   <- EventsFromInputStreamImpl.eventFileService(RawEventInputStream(getClass.getResourceAsStream("/sample1.json"))).eventStream.take(5).runCount
         } yield assert(5)(equalTo(fromFile)))
       }.provideSomeLayer[ZEnv](layers)
     )

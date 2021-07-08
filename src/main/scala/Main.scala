@@ -1,13 +1,22 @@
-import eventsrc.{BlackBoxPath, EventFromBlackBox}
+import eventsrc.{BlackBoxPath, RawEventInputStream, EventFromBlackBox, EventsFromInputStreamImpl, Eventsrc}
+import rest.Endpoints
 import zio.*
 import zio.logging.*
+import zio.console.*
+import zio.blocking.*
+import zhttp.http.*
+import zhttp.service.Server
 
 object Main extends App:
-  val live = Logging.console()
-
   override def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] =
+    val execFileName = args.headOption.getOrElse("/Users/andersbohn/Downloads/blackbox.macosx")
+    val port         = args.tails.flatMap(_.headOption.flatMap(_.headOption.map(_.toInt))).nextOption().getOrElse(8080)
+    val needed       = Logging.console() ++ Blocking.live ++ Console.live
+//    val layer  = EventFromBlackBox.spinUpBuffer(BlackBoxPath(execFileName)).toLayer
+//    val layer  = Eventsrc.liveBbox >>> Eventsrc.liveZstream
+    val layer  = (needed ++ ZLayer.succeed(BlackBoxPath(execFileName))) >>>  Eventsrc.liveBbox >>> Eventsrc.liveZstream
+    val layers       =  needed ++ layer
     (for {
       _ <- console.putStrLn("ZivergeTechBoxer - spinning up .. ")
-      _ <- EventFromBlackBox.spinUpBuffer(BlackBoxPath(args.headOption.getOrElse("/Users/andersbohn/Downloads/blackbox.macosx")))// FIXME replace with some nice zio-/zlayer-config?! 
-
-    } yield ()).provideSomeLayer[ZEnv](live).exitCode
+      _ <- Server.start(port, Endpoints.routes)
+    } yield ()).provideSomeLayer[ZEnv](layers).exitCode
