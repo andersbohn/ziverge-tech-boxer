@@ -1,4 +1,5 @@
 import domain.{Event, Stats}
+import eventsrc.Eventsrc.EventsrcEnv
 import zio.*
 import zio.blocking.*
 import zio.stream.*
@@ -12,4 +13,7 @@ package object eventsrc {
 
   def stats: RIO[EventsrcService, Stats] =
     ZIO.accessM(_.get.stats)
+
+  def streamEm: RIO[EventsrcEnv, Long] =
+    ZIO.accessM(_.get[Eventsrc.Service].streamEm)
 }

@@ -4,9 +4,10 @@ import zio.*
 import zio.console.*
 import zio.blocking.*
 import zio.stream.*
-import domain.{ Event, EventRaw, Stats }
+import domain.{Event, EventRaw, Stats}
+import eventsrc.Eventsrc.EventsrcEnv
 
-import java.io.{ BufferedReader, IOException, InputStream, InputStreamReader }
+import java.io.{BufferedReader, IOException, InputStream, InputStreamReader}
 import java.nio.file.Path
 import java.time.LocalDateTime
 
@@ -15,11 +16,12 @@ case class RawEventInputStream(inputStream: InputStream)
 
 object Eventsrc {
 
-  type EventsrcEnv = Console & Blocking
+  type EventsrcEnv = Console & Blocking & EventsrcService
 
   trait Service {
     def eventStream: ZStream[EventsrcEnv, Throwable, Either[Throwable, Event]]
     def stats: RIO[EventsrcService, Stats]
+    def streamEm: ZIO[EventsrcEnv, Throwable, Long]
   }
 
   val liveZstream: ZLayer[Has[RawEventInputStream], Nothing, EventsrcService] =
@@ -66,7 +68,12 @@ case object EventsFromInputStreamImpl {
           event <- Task.fromEither(Event.fromRaw(raw))
         } yield event
 
-      override def eventStream: ZStream[Eventsrc.EventsrcEnv, Throwable, Either[Throwable, Event]] =
+
+      override def streamEm: ZIO[EventsrcEnv, Throwable, Long] =
+        val value: ZIO[EventsrcEnv, Throwable, Long] = eventStream.runCount
+        value
+
+      override def eventStream: ZStream[EventsrcEnv, Throwable, Either[Throwable, Event]] =
         ZStream
           .fromInputStream(file.inputStream)
           .chunkN(1)
