@@ -4,10 +4,12 @@ import zio.*
 import zio.blocking.Blocking
 import zio.test.*
 import zio.test.Assertion.*
+import zio.logging.*
 import zio.console.*
 import zio.json.*
+import zio.stm.*
 import domain.*
-import eventsrc.{ EventsFromInputStreamImpl, Eventsrc, RawEventInputStream }
+import eventsrc.{ BlackBoxPath, EventsFromInputStreamImpl, Eventsrc, RawEventInputStream }
 
 import java.time.LocalDateTime
 
@@ -15,8 +17,11 @@ object MiniSpec extends DefaultRunnableSpec {
 
   val OneRaw = """{ "event_type": "bar", "data": "dolor", "timestamp": 1625674980 }"""
 
-//  val layers = Blocking.live ++ ZLayer.succeed(EventFile(ZInputStream.fromInputStream(getClass.getResourceAsStream("/sample1.json")))) >>> Eventsrc.liveZstream
-  val layers = Blocking.live
+  val port   = 8080
+  val needed = Logging.console() ++ Blocking.live ++ Console.live
+  val layer  =
+    ZLayer.succeed(RawEventInputStream(getClass.getResourceAsStream("/sample1.json"))) >>> Eventsrc.liveZstream
+  val layers = needed ++ layer
 
   import zio.json.JsonCodec.apply
 
@@ -29,13 +34,21 @@ object MiniSpec extends DefaultRunnableSpec {
         } yield assert("bar")(equalTo(event.eventType)) &&
           assert("dolor")(equalTo(event.data)) &&
           assert(LocalDateTime.of(2021, 7, 7, 16, 23))(equalTo(event.timestamp)))
-      }
-//      ,
-//      testM(" read a json file stream ") {
-//        (for {
-//          fork <- eventsrc.streamEm.fork
-//          fromFile   <- EventsFromInputStreamImpl.eventFileService(RawEventInputStream(getClass.getResourceAsStream("/sample1.json"))).eventStream.take(5).runCount
-//        } yield assert(5)(equalTo(fromFile)))
-//      }.provideSomeLayer[ZEnv](layers)
+      },
+      testM(" validate update stats fun ") {
+        (for {
+          stats1 <- Task.succeed(Stats(1, 2, Map("a" -> 3, "b" -> 4)))
+          stats2  = stats1.updateWith(Stats.one(Right(Event("a", "tehadata", LocalDateTime.now))))
+        } yield assert(stats2.wordCount)(equalTo(Map("a" -> 4, "b" -> 4))))
+      },
+      testM(" read a json file stream ") {
+        (for {
+          statCnts     <- STM.atomically(TRef.make(Stats.zero))
+          cnt          <- eventsrc.streamEm(statCnts)
+          statsUpdated <- STM.atomically(statCnts.get)
+        } yield assert(14)(equalTo(cnt)) &&
+          assert(0)(equalTo(statsUpdated.eventCount)) &&
+          assert(0)(equalTo(statsUpdated.errorCount)))
+      }.provideSomeLayer[ZEnv](layers)
     )
 }

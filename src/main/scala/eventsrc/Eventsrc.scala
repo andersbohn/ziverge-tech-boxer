@@ -23,7 +23,7 @@ object Eventsrc {
     def eventStream: ZStream[EventsrcEnv, Throwable, Either[Throwable, Event]]
     def stats(statsStm: TRef[Stats]): STM[Throwable, Stats]
     def streamEm(statsStm: TRef[Stats]): ZIO[EventsrcEnv, Throwable, Long]
-    def updateStats(statsStm: TRef[Stats], updCounts: Stats): STM[String, Stats]
+    def updateStats(statsStm: TRef[Stats], updCounts: Stats): ZSTM[EventsrcEnv, Nothing, Stats]
   }
 
   val liveZstream: ZLayer[Has[RawEventInputStream], Nothing, EventsrcService] =
@@ -69,9 +69,7 @@ case object EventsFromInputStreamImpl {
         } yield event
 
       override def streamEm(statsStm: TRef[Stats]): ZIO[EventsrcEnv, Throwable, Long] =
-        val value: ZIO[EventsrcEnv, Throwable, Long] =
-          eventStream.map(x => updateStats(statsStm, Stats.one(x))).runCount
-        value
+        eventStream.map(x => updateStats(statsStm, Stats.one(x))).runCount
 
       override def eventStream: ZStream[EventsrcEnv, Throwable, Either[Throwable, Event]] =
         ZStream
@@ -86,7 +84,7 @@ case object EventsFromInputStreamImpl {
       override def stats(statsStm: TRef[Stats]): STM[Throwable, Stats] =
         statsStm.get
 
-      override def updateStats(statsStm: TRef[Stats], updCounts: Stats): STM[String, Stats] =
+      override def updateStats(statsStm: TRef[Stats], updCounts: Stats): ZSTM[EventsrcEnv, Nothing, Stats] =
         for {
           _        <- statsStm.update(oldStats => oldStats.updateWith(updCounts))
           resStats <- statsStm.get
