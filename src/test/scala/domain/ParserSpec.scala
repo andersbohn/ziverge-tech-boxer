@@ -16,7 +16,7 @@ import zio.duration.*
 import zio.test.Assertion.isGreaterThanEqualTo
 import zio.test.*
 import zio.test.environment.TestClock
-import eventsrc.{BlackBoxPath, EventsFromInputStreamImpl, Eventsrc, RawEventInputStream}
+import eventsrc.{ BlackBoxPath, EventsFromInputStreamImpl, Eventsrc, RawEventInputStream }
 
 import java.time.LocalDateTime
 
@@ -25,10 +25,8 @@ object MiniSpec extends DefaultRunnableSpec {
   val OneRaw = """{ "event_type": "bar", "data": "dolor", "timestamp": 1625674980 }"""
 
   val port   = 8080
-  val needed = Logging.console() ++ Blocking.live ++ Console.live //++ TestClock.default
-  val layer  =
+  val layers =
     ZLayer.succeed(RawEventInputStream(getClass.getResourceAsStream("/sample1.json"))) >>> Eventsrc.liveZstream
-  val layers = needed ++ layer
 
   import zio.json.JsonCodec.apply
 
@@ -47,18 +45,18 @@ object MiniSpec extends DefaultRunnableSpec {
           stats1 <- Task.succeed(Stats(1, 2, Map("a" -> 3, "b" -> 4)))
           stats3  = stats1.updateWith(Stats.one(Right(Event("a", "tehadata", LocalDateTime.now))))
           stats2  = stats3.updateWith(Stats.one(Left(new RuntimeException("bad!"))))
-        } yield assert(stats2.wordCount)(equalTo(Map("a" -> 4, "b" -> 4)))&&
+        } yield assert(stats2.wordCount)(equalTo(Map("a" -> 4, "b" -> 4))) &&
           assert(3)(equalTo(stats2.errorCount)))
       },
       testM(" read a json file stream ") {
         (for {
           statCnts     <- STM.atomically(TRef.make(Stats.zero))
           cnt          <- eventsrc.streamEm(statCnts)
-//          _         <- TestClock.adjust(30.seconds) // FIXME can't get the testclock zlayer in here
+          _            <- TestClock.adjust(120.seconds) // TODO not sure why testtime hasn't made things be processed by the strem
           statsUpdated <- STM.atomically(statCnts.get)
         } yield assert(1)(equalTo(cnt)) &&
           assert(0)(equalTo(statsUpdated.eventCount)) &&
           assert(0)(equalTo(statsUpdated.errorCount)))
-      }.provideSomeLayer[ZEnv](layers)
+      }.provideCustomLayer(layers)
     )
 }

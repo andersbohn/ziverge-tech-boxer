@@ -73,7 +73,7 @@ case object EventsFromInputStreamImpl {
       override def streamEm(statsStm: TRef[Stats]): ZIO[EventsrcEnv, Throwable, Long] =
         eventStream
           .mapM(x => updateStats(statsStm, Stats.one(x)))
-          .groupedWithin(30, 60.seconds)
+          .groupedWithin(30, 10.seconds)
           .mapM(x => STM.atomically(statsStm.update(_ => Stats.zero)) *> Task.succeed(x))
           .runCount
 
