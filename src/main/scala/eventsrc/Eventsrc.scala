@@ -5,6 +5,7 @@ import zio.console.*
 import zio.blocking.*
 import zio.stream.*
 import zio.stm.*
+import zio.duration._
 import domain.{ Event, EventRaw, Stats }
 import eventsrc.Eventsrc.EventsrcEnv
 
@@ -21,9 +22,9 @@ object Eventsrc {
 
   trait Service {
     def eventStream: ZStream[EventsrcEnv, Throwable, Either[Throwable, Event]]
-    def stats(statsStm: TRef[Stats]): STM[Throwable, Stats]
+    def stats(statsStm: TRef[Stats]): Task[Stats]
     def streamEm(statsStm: TRef[Stats]): ZIO[EventsrcEnv, Throwable, Long]
-    def updateStats(statsStm: TRef[Stats], updCounts: Stats): ZSTM[EventsrcEnv, Nothing, Stats]
+    def updateStats(statsStm: TRef[Stats], updCounts: Stats): ZIO[EventsrcEnv, Nothing, Stats]
   }
 
   val liveZstream: ZLayer[Has[RawEventInputStream], Nothing, EventsrcService] =
@@ -69,7 +70,14 @@ case object EventsFromInputStreamImpl {
         } yield event
 
       override def streamEm(statsStm: TRef[Stats]): ZIO[EventsrcEnv, Throwable, Long] =
-        eventStream.map(x => updateStats(statsStm, Stats.one(x))).runCount
+        eventStream.mapM(x => updateStats(statsStm, Stats.one(x))).runCount
+//        val x: ZStream[eventsrc.Eventsrc.EventsrcEnv & zio.clock.Clock, Throwable, Chunk[Either[Throwable,Event]]] = eventStream.groupedWithin(30, 3.seconds)
+//        x.mapChunks(identity).mapM{ cs =>
+//          cs.map { c =>
+//            updateStats(statsStm, Stats.one(c))
+//          }
+//
+//        }.runCount
 
       override def eventStream: ZStream[EventsrcEnv, Throwable, Either[Throwable, Event]] =
         ZStream
@@ -81,14 +89,14 @@ case object EventsFromInputStreamImpl {
           .mapM(parseEvent(_).either)
           .tap(eOrE => console.putStrLn(s"eOrE: $eOrE"))
 
-      override def stats(statsStm: TRef[Stats]): STM[Throwable, Stats] =
-        statsStm.get
+      override def stats(statsStm: TRef[Stats]): Task[Stats] =
+        STM.atomically(statsStm.get)
 
-      override def updateStats(statsStm: TRef[Stats], updCounts: Stats): ZSTM[EventsrcEnv, Nothing, Stats] =
-        for {
-          _        <- statsStm.update(oldStats => oldStats.updateWith(updCounts))
+      override def updateStats(statsStm: TRef[Stats], updCounts: Stats): ZIO[EventsrcEnv, Nothing, Stats] =
+        STM.atomically(for {
+          x        <- statsStm.update(oldStats => oldStats.updateWith(updCounts))
           resStats <- statsStm.get
-        } yield resStats
+        } yield resStats)
 
     }
 

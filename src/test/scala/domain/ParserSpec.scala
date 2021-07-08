@@ -38,8 +38,10 @@ object MiniSpec extends DefaultRunnableSpec {
       testM(" validate update stats fun ") {
         (for {
           stats1 <- Task.succeed(Stats(1, 2, Map("a" -> 3, "b" -> 4)))
-          stats2  = stats1.updateWith(Stats.one(Right(Event("a", "tehadata", LocalDateTime.now))))
-        } yield assert(stats2.wordCount)(equalTo(Map("a" -> 4, "b" -> 4))))
+          stats3  = stats1.updateWith(Stats.one(Right(Event("a", "tehadata", LocalDateTime.now))))
+          stats2  = stats3.updateWith(Stats.one(Left(new RuntimeException("bad!"))))
+        } yield assert(stats2.wordCount)(equalTo(Map("a" -> 4, "b" -> 4)))&&
+          assert(3)(equalTo(stats2.errorCount)))
       },
       testM(" read a json file stream ") {
         (for {
@@ -47,7 +49,7 @@ object MiniSpec extends DefaultRunnableSpec {
           cnt          <- eventsrc.streamEm(statCnts)
           statsUpdated <- STM.atomically(statCnts.get)
         } yield assert(14)(equalTo(cnt)) &&
-          assert(0)(equalTo(statsUpdated.eventCount)) &&
+          assert(14)(equalTo(statsUpdated.eventCount)) &&
           assert(0)(equalTo(statsUpdated.errorCount)))
       }.provideSomeLayer[ZEnv](layers)
     )

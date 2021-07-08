@@ -19,7 +19,7 @@ object Endpoints {
     case Method.GET -> Root / "health" =>
       Task.succeed(Response.text("""{"ok": "isgood")"""))
     case Method.GET -> Root / "stats"  =>
-      ZSTM.atomically(eventsrc.stats(statsStm)).map(jsonize(_)).map(Response.text)
+      eventsrc.stats(statsStm).map(jsonize(_)).map(Response.text)
   }
 
 }
