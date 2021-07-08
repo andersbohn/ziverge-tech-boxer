@@ -7,7 +7,7 @@ import zio.test.Assertion.*
 import zio.console.*
 import zio.json.*
 import domain.*
-import eventsrc.{RawEventInputStream, EventsFromInputStreamImpl, Eventsrc}
+import eventsrc.{ EventsFromInputStreamImpl, Eventsrc, RawEventInputStream }
 
 import java.time.LocalDateTime
 
