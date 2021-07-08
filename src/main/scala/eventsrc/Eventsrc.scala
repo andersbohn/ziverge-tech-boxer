@@ -38,8 +38,10 @@ case object EventFromBlackBox {
 
     ZManaged.make(acquire(file.localFile))(release).use { (prc, reader) =>
       (for {
-        event <- EventFromFileImpl.eventFileService(reader).eventStream.either.runDrain
-        _     <- console.putStrLn(s"> $event") // FIXME aaarg
+        event <- EventFromFileImpl.eventFileService(reader).eventStream
+          .either
+          .tap(eOrE => console.putStrLn(eOrE.toString))
+          .runDrain
       } yield ()).forever
     }
   }
