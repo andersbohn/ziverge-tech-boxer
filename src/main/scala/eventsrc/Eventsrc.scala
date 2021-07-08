@@ -4,20 +4,19 @@ import zio.*
 import zio.console.*
 import zio.blocking.*
 import zio.stream.*
-import domain.Event
+import domain.{Event, EventRaw}
 
-import java.io.{BufferedReader, InputStreamReader}
+import java.io.{BufferedReader, IOException, InputStream, InputStreamReader}
 import java.nio.file.Path
 import java.time.LocalDateTime
 
 case class BlackBoxPath(localFile: String)
-case class EventFile(inputStream: ZInputStream)
+case class EventFile(inputStream: InputStream)
 
 object Eventsrc {
 
   trait Service {
-    def eventStream: Stream[Blocking, Event]
-    def eventList: RIO[Blocking, List[Event]]
+    def eventStream: ZStream[Blocking, Throwable, Event]
   }
 
   val liveBlackBoxStream: ZLayer[Has[BlackBoxPath], Nothing, EventsrcService] =
@@ -32,31 +31,30 @@ case object EventFromBlackBox {
   def spinUpBuffer(file: BlackBoxPath): ZIO[Console, Throwable, Unit] = {
     def acquire(file: String) = ZIO.effect {
       val prc = sys.runtime.exec(file)
-      val br = new BufferedReader(new InputStreamReader(prc.getInputStream, "UTF-8"))
+      val br  = new BufferedReader(new InputStreamReader(prc.getInputStream, "UTF-8"))
       prc -> br
     }
 
-    def release(prc:Process, reader: BufferedReader) = ZIO.effectTotal {
+    def release(prc: Process, reader: BufferedReader) = ZIO.effectTotal {
       prc.destroy()
       reader.close()
     }
 
     ZManaged.make(acquire(file.localFile))(release).use { (prc, reader) =>
-      Task.effect{
-        val str = reader.readLine()
-        println(str) // FIXME aaarg
-        str
-      }.forever
+      (for {
+        str  <- Task.effect(reader.readLine())
+        raw  <- EventRaw.parseJson(str).either
+        event = raw.flatMap(Event.fromRaw)
+        _    <- console.putStrLn(s"> $event") // FIXME aaarg
+      } yield ()).forever
     }
   }
 
-  def spinUpAndStream(blackBox:BlackBoxPath) =
+  def spinUpAndStream(blackBox: BlackBoxPath) =
     new Eventsrc.Service {
-      override def eventStream: Stream[Blocking, Event] =
+      override def eventStream: ZStream[Blocking, IOException, Event] =
         ???
 
-      override def eventList: RIO[Blocking, List[Event]] =
-        ???
     }
 
 }
@@ -66,14 +64,20 @@ case object EventFromFileImpl {
   def eventFileService(file: EventFile) =
     new Eventsrc.Service {
 
-      override def eventStream: Stream[Blocking, Event] = ???
+      def parseEvent(s:String): ZIO[Blocking, Throwable, Event] =
+        for {
+          raw <- EventRaw.parseJson(s)
+          event <- Task.fromEither(Event.fromRaw(raw))
+        } yield event
 
-      override def eventList: RIO[Blocking, List[Event]] =
-        (for {
-          fileBytes <- file.inputStream.readAll(10000).mapError(_.getOrElse(new RuntimeException("None in ioexception?!? ")))
-          fileStr <- Task.effect(fileBytes.map(_.toChar).mkString)
-//          _        <- Task.effect(println(fileStr))
-        } yield List(Event("bar", "", LocalDateTime.now())))
+      override def eventStream: ZStream[Blocking, Throwable, Event] =
+        ZStream.fromInputStream(file.inputStream)
+          .chunkN(1)
+          .aggregate(ZTransducer.utf8Decode)
+          .aggregate(ZTransducer.splitLines)
+          .mapChunks(identity)
+          .mapM(parseEvent)
+
     }
 
 }

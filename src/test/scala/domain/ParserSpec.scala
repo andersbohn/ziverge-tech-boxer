@@ -6,7 +6,7 @@ import zio.test.*
 import zio.test.Assertion.*
 import zio.json.*
 import domain.*
-import eventsrc.{EventFile, Eventsrc}
+import eventsrc.{EventFile, EventFromFileImpl, Eventsrc}
 
 import java.time.LocalDateTime
 
@@ -14,7 +14,8 @@ object MiniSpec extends DefaultRunnableSpec {
 
   val OneRaw = """{ "event_type": "bar", "data": "dolor", "timestamp": 1625674980 }"""
 
-  val layers = Blocking.live ++ ZLayer.succeed(EventFile(ZInputStream.fromInputStream(getClass.getResourceAsStream("/sample1.json")))) >>> Eventsrc.liveZstream
+//  val layers = Blocking.live ++ ZLayer.succeed(EventFile(ZInputStream.fromInputStream(getClass.getResourceAsStream("/sample1.json")))) >>> Eventsrc.liveZstream
+  val layers = Blocking.live
 
   import zio.json.JsonCodec.apply
 
@@ -30,9 +31,8 @@ object MiniSpec extends DefaultRunnableSpec {
       },
       testM(" read a json file stream ") {
         (for {
-          fromFile   <- eventsrc.eventList
-        } yield assert("bar")(equalTo(fromFile.head.eventType))
-          )
+          fromFile   <- EventFromFileImpl.eventFileService(EventFile(getClass.getResourceAsStream("/sample1.json"))).eventStream.take(5).runCount
+        } yield assert(5)(equalTo(fromFile)))
       }.provideSomeLayer[ZEnv](layers)
     )
 }
