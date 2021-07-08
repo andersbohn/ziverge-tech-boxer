@@ -77,7 +77,8 @@ case object EventsFromInputStreamImpl {
           .tap(eOrE => console.putStrLn(s"eOrE: $eOrE"))
 
       override def stats: RIO[EventsrcService, Stats] =
-        Task.succeed(Stats(0, Map("x" -> 0)))
+        // FIXME lookup in latest grouping/aggr on the stream
+        Task.succeed(Stats(0, 0, Map("x" -> 0)))
     }
 
 }
