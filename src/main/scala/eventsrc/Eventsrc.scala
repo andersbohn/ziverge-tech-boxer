@@ -31,6 +31,9 @@ object Eventsrc {
   val liveZstream: ZLayer[Has[RawEventInputStream], Nothing, EventsrcService] =
     ZLayer.fromService[RawEventInputStream, Eventsrc.Service](EventsFromInputStreamImpl.eventFileService)
 
+  val consoleIn: ZLayer[Any, Nothing, Has[RawEventInputStream]] =
+    ZLayer.succeed(RawEventInputStream(java.lang.System.in))
+
   val liveBbox: ZLayer[Console & Blocking & Has[BlackBoxPath], Nothing, Has[RawEventInputStream]] =
     ZLayer.fromService[BlackBoxPath, RawEventInputStream](EventFromBlackBox.spinUnmanaged)
 
@@ -74,7 +77,7 @@ case object EventsFromInputStreamImpl {
         eventStream
           .mapM(x => updateStats(statsStm, Stats.one(x)))
           .groupedWithin(30, 10.seconds)
-          .mapM(x => STM.atomically(statsStm.update(_ => Stats.zero)) *> Task.succeed(x))
+          .mapM(x => STM.atomically(statsStm.update(_ => Stats.zero).as(x)))
           .runCount
 
       override def eventStream: ZStream[EventsrcEnv, Throwable, Either[Throwable, Event]] =
