@@ -7,15 +7,15 @@ import zio.clock.Clock
 import zio.stream.*
 import zio.stm.*
 import zio.duration.*
-import domain.{ Event, EventRaw, Stats }
+import domain.{Event, EventRaw, GroupingConfigs, Stats}
 import eventsrc.Eventsrc.EventsrcEnv
 
-import java.io.{ BufferedReader, IOException, InputStream, InputStreamReader }
+import java.io.{BufferedReader, IOException, InputStream, InputStreamReader}
 import java.nio.file.Path
 import java.time.LocalDateTime
 
 case class BlackBoxPath(localFile: String)
-case class RawEventInputStream(inputStream: InputStream)
+case class RawEventInputStream(inputStream: InputStream, groupingConfigs: GroupingConfigs = GroupingConfigs.default)
 
 object Eventsrc {
 
@@ -66,7 +66,7 @@ case object EventsFromInputStreamImpl {
 
   def eventFileService(file: RawEventInputStream) =
     new Eventsrc.Service {
-
+      val cfg = file.groupingConfigs
       def parseEvent(s: String): ZIO[Blocking, Throwable, Event] =
         for {
           raw   <- EventRaw.parseJson(s)
@@ -76,8 +76,9 @@ case object EventsFromInputStreamImpl {
       override def streamEm(statsStm: TRef[Stats]): ZIO[EventsrcEnv, Throwable, Long] =
         eventStream
           .mapM(x => updateStats(statsStm, Stats.one(x)))
-          .groupedWithin(30, 10.seconds)
+          .groupedWithin(cfg.windowCount, cfg.windowSeconds.seconds)
           .mapM(x => STM.atomically(statsStm.update(_ => Stats.zero).as(x)))
+          .tap(eOrE => console.putStrLn(s"W at ${LocalDateTime.now()} ${eOrE.size}"))
           .runCount
 
       override def eventStream: ZStream[EventsrcEnv, Throwable, Either[Throwable, Event]] =
@@ -88,7 +89,7 @@ case object EventsFromInputStreamImpl {
           .aggregate(ZTransducer.splitLines)
           .mapChunks(identity)
           .mapM(parseEvent(_).either)
-          .tap(eOrE => console.putStrLn(s"eOrE: $eOrE"))
+//          .tap(eOrE => console.putStrLn(s"eOrE: $eOrE"))
 
       override def stats(statsStm: TRef[Stats]): Task[Stats] =
         STM.atomically(statsStm.get)
