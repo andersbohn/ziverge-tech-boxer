@@ -7,10 +7,10 @@ import zio.clock.Clock
 import zio.stream.*
 import zio.stm.*
 import zio.duration.*
-import domain.{Event, EventRaw, GroupingConfigs, Stats}
+import domain.{ Event, EventRaw, GroupingConfigs, Stats }
 import eventsrc.Eventsrc.EventsrcEnv
 
-import java.io.{BufferedReader, IOException, InputStream, InputStreamReader}
+import java.io.{ BufferedReader, IOException, InputStream, InputStreamReader }
 import java.nio.file.Path
 import java.time.LocalDateTime
 
@@ -66,7 +66,7 @@ case object EventsFromInputStreamImpl {
 
   def eventFileService(file: RawEventInputStream) =
     new Eventsrc.Service {
-      val cfg = file.groupingConfigs
+      val cfg                                                    = file.groupingConfigs
       def parseEvent(s: String): ZIO[Blocking, Throwable, Event] =
         for {
           raw   <- EventRaw.parseJson(s)

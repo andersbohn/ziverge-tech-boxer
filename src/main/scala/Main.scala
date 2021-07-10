@@ -1,5 +1,5 @@
-import domain.{GroupingConfigs, Stats}
-import eventsrc.{BlackBoxPath, EventFromBlackBox, EventsFromInputStreamImpl, Eventsrc, RawEventInputStream}
+import domain.{ GroupingConfigs, Stats }
+import eventsrc.{ BlackBoxPath, EventFromBlackBox, EventsFromInputStreamImpl, Eventsrc, RawEventInputStream }
 import rest.Endpoints
 import zio.*
 import zio.logging.*
@@ -31,19 +31,25 @@ object Main extends App:
       _        <- Server.start(pa.port, Endpoints.routes(statCnts))
     } yield ()).provideSomeLayer[ZEnv](layers).exitCode
 
-case class CmdArgs(execFileStreamOrInput: Either[String, Unit], port: Int, cfgs : GroupingConfigs = GroupingConfigs.default)
+case class CmdArgs(
+  execFileStreamOrInput: Either[String, Unit],
+  port: Int,
+  cfgs: GroupingConfigs = GroupingConfigs.default
+)
 object CmdArgs {
   def empty = new CmdArgs(Right(()), 8080)
-  val Help  = """use -i <path-to-exe-file> or --port to override port 8080 as target (and --windowSeconds and --windowCount to override windowing defaults) """
+  val Help  =
+    """use -i <path-to-exe-file> or --port to override port 8080 as target (and --windowSeconds and --windowCount to override windowing defaults) """
 
   def parseArgs(args: List[String]) = args.sliding(2, 2).foldLeft(CmdArgs.empty) { case (accArgs, arg) =>
     arg match {
-      case "--windowSeconds" :: updSeconds :: Nil       => accArgs.copy(cfgs = accArgs.cfgs.copy(windowSeconds=updSeconds.toInt))
-      case "--windowCount" :: updCount :: Nil       => accArgs.copy(cfgs = accArgs.cfgs.copy(windowCount=updCount.toInt))
-      case "-i" :: execFile :: Nil       => accArgs.copy(execFileStreamOrInput = Left(execFile))
-      case "--port" :: aPort :: Nil      => accArgs.copy(port = aPort.toInt)
-      case "-h" :: Nil | "--help" :: Nil => println(CmdArgs.Help); sys.exit(1)
-      case unknownArg                    => println(s"unknown arg $unknownArg -> ${CmdArgs.Help} "); sys.exit(1)
+      case "--windowSeconds" :: updSeconds :: Nil =>
+        accArgs.copy(cfgs = accArgs.cfgs.copy(windowSeconds = updSeconds.toInt))
+      case "--windowCount" :: updCount :: Nil     => accArgs.copy(cfgs = accArgs.cfgs.copy(windowCount = updCount.toInt))
+      case "-i" :: execFile :: Nil                => accArgs.copy(execFileStreamOrInput = Left(execFile))
+      case "--port" :: aPort :: Nil               => accArgs.copy(port = aPort.toInt)
+      case "-h" :: Nil | "--help" :: Nil          => println(CmdArgs.Help); sys.exit(1)
+      case unknownArg                             => println(s"unknown arg $unknownArg -> ${CmdArgs.Help} "); sys.exit(1)
     }
   }
 }
